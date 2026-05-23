@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBasket Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; 
+            background-image: 
+                radial-gradient(circle at top left, rgba(224, 242, 254, 0.6), transparent 40%), 
+                radial-gradient(circle at bottom right, rgba(238, 242, 255, 0.6), transparent 40%), 
+                radial-gradient(#cbd5e1 1.5px, transparent 1.5px); 
+            background-size: 100% 100%, 100% 100%, 24px 24px;
+            background-attachment: fixed;
+            color: #0f172a; 
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid #f8fafc; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .content-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid #e2e8f0; 
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.01);
+            border-radius: 1.25rem;
+        }
+
+        .light-input {
+            background: #f8fafc; 
+            border: 1px solid #cbd5e1; 
+            color: #0f172a;
+            transition: all 0.2s ease;
+        }
+        .light-input:focus {
+            border-color: #6366f1; 
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            outline: none;
+        }
+        
+        /* Auto-Scanner Laser Animation */
+        .scan-laser {
+            width: 100%;
+            height: 2px;
+            background-color: #4ade80; /* emerald-400 */
+            box-shadow: 0 0 10px #4ade80, 0 0 20px #4ade80;
+            position: absolute;
+            left: 0;
+            top: 0;
+            animation: scan 2s ease-in-out infinite;
+        }
+
+        @keyframes scan {
+            0%, 100% { top: 0%; }
+            50% { top: 100%; }
+        }
+
+        /* Loading Spinner */
+        .loader {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-6 lg:p-8 selection:bg-indigo-100 selection:text-indigo-900 relative">
+
+    <!-- Top Navigation / Header -->
+    <header class="max-w-7xl mx-auto mb-8 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center shadow-md shadow-indigo-200">
+                <i class="fas fa-shopping-basket text-white text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-800">SmartBasket</h1>
+                <p class="text-xs text-slate-500 font-medium uppercase tracking-wider">Grocery Analytics & Tracking</p>
+            </div>
+        </div>
+        <div class="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-xs text-slate-600 font-semibold shadow-sm">
+            <div id="statusDot" class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></div>
+            <span id="statusText">Warming up Scanner...</span>
+        </div>
+    </header>
+
+    <!-- Main Layout Container -->
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start relative">
+
+        <!-- ==========================================
+             LEFT COLUMN: ACTIVE WORKSPACE 
+             ========================================== -->
+        <div class="lg:col-span-8 relative min-h-[60vh]">
+
+            <!-- DASHBOARD VIEW -->
+            <div id="dashboardView" class="space-y-6 transition-all duration-300">
+                
+                <!-- Add Item Card -->
+                <div class="content-card p-6 border-t-4 border-t-indigo-500">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-sm font-bold text-slate-700 flex items-center uppercase tracking-wide">
+                            <i class="fas fa-plus-circle mr-2 text-indigo-500 text-lg"></i>Add New Item
+                        </h2>
+                        <!-- Camera OCR Button -->
+                        <button type="button" id="openScannerBtn" disabled class="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm cursor-not-allowed">
+                            <i class="fas fa-camera mr-1.5"></i> Loading Scanner...
+                        </button>
+                    </div>
+                    <form id="itemForm" class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Item Name</label>
+                            <input type="text" id="itemName" placeholder="e.g., Organic Apples" required
+                                class="light-input w-full px-4 py-3 rounded-xl text-sm font-medium">
+                        </div>
+                        <div class="w-full md:w-32">
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Price</label>
+                            <input type="number" id="itemPrice" placeholder="0.00" step="0.01" min="0" required
+                                class="light-input w-full px-4 py-3 rounded-xl text-sm font-medium">
+                        </div>
+                        <div class="w-full md:w-24">
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Qty</label>
+                            <input type="number" id="itemQty" value="1" min="1" required
+                                class="light-input w-full px-4 py-3 rounded-xl text-sm font-medium">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" 
+                                class="w-full md:w-auto bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-200 text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5">
+                                Add
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Current Cart Card -->
+                <div class="content-card p-0 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <h2 class="text-sm font-bold text-slate-700 flex items-center uppercase tracking-wide">
+                            <i class="fas fa-shopping-cart mr-2 text-sky-500 text-lg"></i>Current Cart
+                        </h2>
+                        <div class="text-right bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-2">Total</span>
+                            <span class="text-xl font-black text-slate-800 tracking-tight">$<span id="cartTotal">0.00</span></span>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <ul id="currentCartList" class="space-y-3 mb-2 empty:hidden"></ul>
+                        
+                        <div id="emptyCartMessage" class="text-slate-400 text-center py-12 flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                            <div class="h-16 w-16 rounded-full bg-white flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
+                                <i class="fas fa-box-open text-2xl text-slate-300"></i>
+                            </div>
+                            <p class="text-sm font-bold text-slate-500">Your cart is empty.</p>
+                        </div>
+
+                        <div class="mt-6 hidden" id="saveTripContainer">
+                            <button id="saveTripBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl transition-all duration-200 text-sm shadow-md hover:shadow-lg hover:shadow-emerald-500/20 flex justify-center items-center">
+                                <i class="fas fa-check-circle mr-2"></i> Save & Complete Trip
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TRIP DETAILS VIEW (Hidden) -->
+            <div id="tripDetailsView" class="hidden absolute top-0 left-0 w-full space-y-6 transition-all duration-300 opacity-0 pointer-events-none">
+                <button onclick="showDashboard()" class="text-slate-500 hover:text-indigo-600 text-sm font-bold transition-colors mb-2 flex items-center bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm w-max">
+                    <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+                </button>
+
+                <div class="content-card p-0 overflow-hidden">
+                    <div class="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
+                        <div>
+                            <h2 class="text-2xl font-black text-slate-800 mb-1">Receipt Details</h2>
+                            <p id="detailDate" class="text-sm text-slate-500 font-medium flex items-center"></p>
+                        </div>
+                        <button onclick="deleteEntireTrip()" class="bg-white text-red-500 hover:bg-red-50 hover:text-red-600 px-4 py-2 rounded-lg text-sm font-bold transition-colors border border-red-100 shadow-sm">
+                            <i class="fas fa-trash-alt mr-2"></i>Delete Trip
+                        </button>
+                    </div>
+
+                    <div class="p-8">
+                        <div class="grid grid-cols-12 text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4 pb-3 border-b border-slate-200">
+                            <div class="col-span-6">Item</div>
+                            <div class="col-span-2 text-center">Qty</div>
+                            <div class="col-span-4 text-right pr-2">Total</div>
+                        </div>
+                        <ul id="detailItemList" class="space-y-2 mb-8"></ul>
+
+                        <!-- Add Missed Item to History Form -->
+                        <div class="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 mt-6">
+                            <h3 class="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-3 flex items-center">
+                                <i class="fas fa-plus mr-2"></i>Add Missed Item
+                            </h3>
+                            <form id="historyItemForm" class="flex flex-col md:flex-row gap-3">
+                                <div class="flex-1">
+                                    <input type="text" id="histItemName" placeholder="Item name" required class="light-input w-full px-3 py-2.5 rounded-lg text-sm font-medium">
+                                </div>
+                                <div class="w-full md:w-28">
+                                    <input type="number" id="histItemPrice" placeholder="Price" step="0.01" min="0" required class="light-input w-full px-3 py-2.5 rounded-lg text-sm font-medium">
+                                </div>
+                                <div class="w-full md:w-20">
+                                    <input type="number" id="histItemQty" value="1" min="1" required class="light-input w-full px-3 py-2.5 rounded-lg text-sm font-medium">
+                                </div>
+                                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-lg transition-colors text-sm shadow-sm">
+                                    Add
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-end items-center">
+                        <div class="text-right">
+                            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Spent</span>
+                            <span class="text-4xl font-black text-slate-800 tracking-tight">$<span id="detailTotal">0.00</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ==========================================
+             RIGHT COLUMN: HISTORY SIDEBAR
+             ========================================== -->
+        <div class="lg:col-span-4 h-full lg:h-[calc(100vh-8rem)] sticky top-6">
+            <div class="content-card flex flex-col h-full overflow-hidden">
+                <div class="p-5 border-b border-slate-100 bg-white">
+                    <h2 class="text-sm font-bold text-slate-700 flex items-center uppercase tracking-wide">
+                        <i class="fas fa-history mr-2 text-indigo-400 text-lg"></i>Shopping History
+                    </h2>
+                </div>
+                <div class="p-5 overflow-y-auto flex-1 bg-slate-50/30">
+                    <div id="historyContainer" class="flex flex-col gap-3"></div>
+                    <div id="emptyHistoryMessage" class="text-slate-400 text-center py-12 hidden flex-col items-center">
+                        <div class="h-16 w-16 rounded-full bg-white flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
+                            <i class="far fa-folder-open text-2xl text-slate-300"></i>
+                        </div>
+                        <p class="text-sm font-bold text-slate-500">No history yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================
+         AUTO-SCANNER MODAL (Hidden by default)
+         ========================================== -->
+    <div id="scannerModal" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-900/90 backdrop-blur-md p-4">
+        <div class="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl relative flex flex-col border border-slate-200">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-white z-10">
+                <h3 class="font-bold text-slate-800 flex items-center">
+                    <div class="loader mr-3 w-4 h-4 border-[2px]"></div>
+                    Auto-Scanning...
+                </h3>
+                <button id="closeScannerBtn" class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full flex items-center justify-center bg-slate-50 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="relative bg-black w-full h-80 flex items-center justify-center overflow-hidden">
+                <video id="cameraFeed" autoplay playsinline class="absolute min-w-full min-h-full object-cover"></video>
+                <div class="absolute inset-0 pointer-events-none border-[40px] border-black/50 flex items-center justify-center">
+                    <div class="w-full h-24 border-2 border-emerald-400/80 rounded bg-emerald-500/10 shadow-[0_0_0_999px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                        <div class="scan-laser"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 bg-slate-50 flex flex-col items-center justify-center text-center">
+                <p class="text-xs font-bold text-slate-600 mb-1">Hold camera steady over the price tag.</p>
+                <p class="text-[10px] text-slate-400">System will capture automatically when a price is detected.</p>
+            </div>
+            <canvas id="cameraCanvas" class="hidden"></canvas>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         EDIT ITEM MODAL (Hidden by default)
+         ========================================== -->
+    <div id="editModal" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+        <div class="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl relative flex flex-col border border-slate-200">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                <h3 class="font-bold text-slate-800 flex items-center">
+                    <i class="fas fa-pen text-indigo-500 mr-2"></i> Edit Item
+                </h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full flex items-center justify-center bg-slate-50 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editItemForm" class="p-5 flex flex-col gap-4 bg-slate-50/50">
+                <input type="hidden" id="editItemId">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Item Name</label>
+                    <input type="text" id="editItemName" class="light-input w-full px-3 py-2.5 rounded-lg text-sm font-medium" required>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Price</label>
+                        <input type="number" id="editItemPrice" step="0.01" min="0" class="light-input w-full px-3 py-2.5 rounded-lg text-sm font-medium" required>
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Qty</label>
+                        <input type="number" id="editItemQty" min="1" class="light-input w-full px-3 py-2.5 rounded-lg text-sm font-medium" required>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-2">
+                    <button type="button" onclick="closeEditModal()" class="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-sm">Cancel</button>
+                    <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors text-sm shadow-sm">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let currentCart = [];
+        let shoppingHistory = JSON.parse(localStorage.getItem('groceryHistory')) || [];
+        let activeTripId = null; 
+
+        // Core App Elements
+        const dashboardView = document.getElementById('dashboardView');
+        const tripDetailsView = document.getElementById('tripDetailsView');
+        const historyContainer = document.getElementById('historyContainer');
+        const emptyHistoryMessage = document.getElementById('emptyHistoryMessage');
+
+        // OCR/Camera Elements
+        const scannerModal = document.getElementById('scannerModal');
+        const cameraFeed = document.getElementById('cameraFeed');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const openScannerBtn = document.getElementById('openScannerBtn');
+        const closeScannerBtn = document.getElementById('closeScannerBtn');
+        
+        let stream = null;
+        let ocrWorker = null;
+        let isScanning = false;
+        let isProcessingFrame = false;
+
+        // Initialize UI
+        renderHistory();
+
+        // ------------------ BACKGROUND OCR INITIALIZATION ------------------
+        (async function initOCRWorker() {
+            try {
+                ocrWorker = await Tesseract.createWorker("eng");
+                document.getElementById('statusDot').classList.replace('bg-amber-400', 'bg-emerald-500');
+                document.getElementById('statusText').innerText = "System Ready";
+                
+                openScannerBtn.disabled = false;
+                openScannerBtn.classList.replace('bg-slate-100', 'bg-indigo-50');
+                openScannerBtn.classList.replace('text-slate-400', 'text-indigo-600');
+                openScannerBtn.classList.replace('cursor-not-allowed', 'cursor-pointer');
+                openScannerBtn.classList.add('hover:bg-indigo-100');
+                openScannerBtn.innerHTML = `<i class="fas fa-camera mr-1.5"></i> Scan Tag`;
+            } catch (err) {
+                console.error("OCR Load Error:", err);
+                document.getElementById('statusDot').classList.replace('bg-amber-400', 'bg-red-500');
+                document.getElementById('statusText').innerText = "Scanner Failed";
+            }
+        })();
+
+
+        // ------------------ AUTO-SCANNER LOGIC ------------------
+        openScannerBtn.addEventListener('click', async () => {
+            scannerModal.classList.remove('hidden');
+            scannerModal.classList.add('flex');
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                cameraFeed.srcObject = stream;
+                cameraFeed.onplaying = () => { isScanning = true; scanFrameLoop(); };
+            } catch (err) {
+                alert("Could not access camera. Please check permissions.");
+                closeScanner();
+            }
+        });
+
+        closeScannerBtn.addEventListener('click', closeScanner);
+
+        function closeScanner() {
+            isScanning = false;
+            scannerModal.classList.add('hidden');
+            scannerModal.classList.remove('flex');
+            if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
+        }
+
+        async function scanFrameLoop() {
+            if (!isScanning || !ocrWorker) return;
+            if (isProcessingFrame) return;
+
+            isProcessingFrame = true;
+            const context = cameraCanvas.getContext('2d');
+            cameraCanvas.width = cameraFeed.videoWidth || 640;
+            cameraCanvas.height = cameraFeed.videoHeight || 480;
+
+            if (cameraCanvas.width > 0) {
+                context.drawImage(cameraFeed, 0, 0, cameraCanvas.width, cameraCanvas.height);
+                const imageData = cameraCanvas.toDataURL('image/jpeg', 0.8);
+
+                try {
+                    const { data: { text } } = await ocrWorker.recognize(imageData);
+                    const found = parseAndApplyOCR(text);
+                    if (found) {
+                        closeScanner(); 
+                        document.getElementById('itemName').focus();
+                        return; 
+                    }
+                } catch (err) { console.error("OCR Analysis Error:", err); }
+            }
+
+            isProcessingFrame = false;
+            if (isScanning) setTimeout(scanFrameLoop, 800);
+        }
+
+        function parseAndApplyOCR(text) {
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            let extractedName = "";
+            let extractedPrice = "";
+            const priceRegex = /(?:₱|PHP|P|\$)\s?(\d+(?:\.\d{2})?)|(\d+\.\d{2})/i;
+
+            for (let i = 0; i < lines.length; i++) {
+                const match = lines[i].match(priceRegex);
+                const foundPrice = match ? (match[1] || match[2]) : null;
+                
+                if (foundPrice) {
+                    extractedPrice = foundPrice;
+                    let cleanLine = lines[i].replace(match[0], '').trim();
+                    if (cleanLine.length > 3) extractedName = cleanLine;
+                    else if (i > 0) extractedName = lines[i-1];
+                    else if (i + 1 < lines.length) extractedName = lines[i+1];
+                    break;
+                }
+            }
+
+            if (extractedPrice) {
+                if (!extractedName) extractedName = "Scanned Item";
+                extractedName = extractedName.substring(0, 30).replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+                
+                document.getElementById('itemName').value = extractedName;
+                document.getElementById('itemPrice').value = parseFloat(extractedPrice).toFixed(2);
+                document.getElementById('itemQty').value = 1;
+                return true; 
+            }
+            return false; 
+        }
+
+        // ------------------ MAIN CART LOGIC ------------------
+        document.getElementById('itemForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('itemName').value;
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            const qty = parseInt(document.getElementById('itemQty').value);
+
+            currentCart.push({ id: Date.now(), name, price, qty, subtotal: price * qty });
+            this.reset();
+            document.getElementById('itemQty').value = 1;
+            document.getElementById('itemName').focus();
+            renderCart();
+        });
+
+        function removeCartItem(id) {
+            currentCart = currentCart.filter(item => item.id !== id);
+            renderCart();
+        }
+
+        function renderCart() {
+            const list = document.getElementById('currentCartList');
+            const totalEl = document.getElementById('cartTotal');
+            const emptyMsg = document.getElementById('emptyCartMessage');
+            const saveContainer = document.getElementById('saveTripContainer');
+            
+            list.innerHTML = '';
+            let total = 0;
+
+            if (currentCart.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                saveContainer.classList.add('hidden');
+            } else {
+                emptyMsg.classList.add('hidden');
+                saveContainer.classList.remove('hidden');
+
+                currentCart.forEach(item => {
+                    total += item.subtotal;
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center bg-white border border-slate-200 px-5 py-4 rounded-xl shadow-sm hover:border-slate-300 transition-colors group';
+                    li.innerHTML = `
+                        <div class="flex-1">
+                            <span class="font-bold text-slate-800 text-sm block">${item.name}</span>
+                            <span class="text-xs font-medium text-slate-500 mt-0.5 block">${item.qty} × $${item.price.toFixed(2)}</span>
+                        </div>
+                        <div class="flex items-center gap-5">
+                            <span class="font-black text-slate-800 text-base">$${item.subtotal.toFixed(2)}</span>
+                            <button onclick="removeCartItem(${item.id})" class="text-slate-400 hover:text-red-500 hover:bg-red-50 h-8 w-8 rounded-full flex items-center justify-center transition-all">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                    list.prepend(li); 
+                });
+            }
+            totalEl.innerText = total.toFixed(2);
+        }
+
+        document.getElementById('saveTripBtn').addEventListener('click', function() {
+            if (currentCart.length === 0) return;
+            const total = currentCart.reduce((sum, item) => sum + item.subtotal, 0);
+            const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            const trip = { id: Date.now(), date: new Date().toLocaleString('en-US', options), items: [...currentCart], total: total };
+
+            shoppingHistory.unshift(trip);
+            localStorage.setItem('groceryHistory', JSON.stringify(shoppingHistory));
+            currentCart = [];
+            renderCart();
+            renderHistory();
+        });
+
+        // ------------------ HISTORY SIDEBAR LOGIC ------------------
+        function renderHistory() {
+            historyContainer.innerHTML = '';
+            if (shoppingHistory.length === 0) {
+                emptyHistoryMessage.classList.remove('hidden');
+                emptyHistoryMessage.classList.add('flex');
+            } else {
+                emptyHistoryMessage.classList.add('hidden');
+                emptyHistoryMessage.classList.remove('flex');
+
+                shoppingHistory.forEach(trip => {
+                    const isActive = trip.id === activeTripId;
+                    const div = document.createElement('div');
+                    
+                    const baseClass = 'p-4 rounded-xl border cursor-pointer transition-all duration-200 ';
+                    const activeClass = isActive 
+                        ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-500/20 shadow-sm' 
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm';
+                    
+                    div.className = baseClass + activeClass;
+                    div.onclick = () => viewTripDetails(trip.id);
+                    
+                    const itemNames = trip.items.map(i => i.name);
+                    let summary = itemNames.length > 0 ? itemNames.slice(0, 2).join(', ') : 'No items';
+                    if (itemNames.length > 2) summary += ` +${itemNames.length - 2} more`;
+
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start mb-2.5">
+                            <h3 class="text-xs font-bold text-slate-700">${trip.date}</h3>
+                            <i class="fas fa-chevron-right text-xs ${isActive ? 'text-indigo-500' : 'text-slate-400'}"></i>
+                        </div>
+                        <p class="text-sm text-slate-500 mb-3 truncate font-medium">${summary}</p>
+                        <div class="flex justify-between items-center border-t border-slate-100 pt-3 mt-1">
+                            <span class="text-[11px] font-bold px-2 py-1 bg-slate-100 rounded text-slate-500">${trip.items.length} Items</span>
+                            <span class="font-black text-sm ${isActive ? 'text-indigo-600' : 'text-slate-800'}">$${trip.total.toFixed(2)}</span>
+                        </div>
+                    `;
+                    historyContainer.appendChild(div);
+                });
+            }
+        }
+
+        // ------------------ RECEIPT DETAILS & EDIT LOGIC ------------------
+        function viewTripDetails(tripId) {
+            activeTripId = tripId;
+            renderTripDetailsView();
+            renderHistory();
+
+            dashboardView.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                dashboardView.classList.add('hidden');
+                dashboardView.classList.remove('absolute', 'top-0', 'left-0', 'w-full'); 
+                
+                tripDetailsView.classList.remove('hidden');
+                tripDetailsView.classList.add('absolute', 'top-0', 'left-0', 'w-full'); 
+                
+                setTimeout(() => {
+                    tripDetailsView.classList.remove('opacity-0', 'pointer-events-none');
+                    tripDetailsView.classList.add('opacity-100');
+                }, 10);
+            }, 300);
+
+            if (window.innerWidth < 1024) window.scrollTo(0, 0);
+        }
+
+        function renderTripDetailsView() {
+            const trip = shoppingHistory.find(t => t.id === activeTripId);
+            if (!trip) return showDashboard();
+
+            document.getElementById('detailDate').innerHTML = `<i class="far fa-calendar text-indigo-500 mr-2"></i> ${trip.date}`;
+            document.getElementById('detailTotal').innerText = trip.total.toFixed(2);
+            
+            const detailList = document.getElementById('detailItemList');
+            detailList.innerHTML = '';
+            
+            trip.items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'grid grid-cols-12 items-center py-3 px-2 border-b border-slate-100 last:border-0 group hover:bg-slate-50 rounded-lg transition-colors';
+                li.innerHTML = `
+                    <div class="col-span-5 font-bold text-slate-800 text-sm">
+                        ${item.name} <br><span class="text-xs text-slate-500 font-medium">$${item.price.toFixed(2)} each</span>
+                    </div>
+                    <div class="col-span-2 text-center text-sm font-bold text-slate-600">×${item.qty}</div>
+                    <div class="col-span-5 flex justify-end items-center gap-2 text-right font-black text-slate-800 text-sm">
+                        <span class="mr-2">$${item.subtotal.toFixed(2)}</span>
+                        <button onclick="openEditModal(${item.id})" class="text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 h-8 w-8 rounded-full flex items-center justify-center transition-colors" title="Edit Item">
+                            <i class="fas fa-pen text-xs"></i>
+                        </button>
+                        <button onclick="removeHistoryItem(${item.id})" class="text-slate-400 hover:text-red-500 hover:bg-red-50 h-8 w-8 rounded-full flex items-center justify-center transition-colors" title="Delete Item">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>
+                    </div>
+                `;
+                detailList.appendChild(li); 
+            });
+        }
+
+        // Add Missed Item Form
+        document.getElementById('historyItemForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const trip = shoppingHistory.find(t => t.id === activeTripId);
+            const name = document.getElementById('histItemName').value;
+            const price = parseFloat(document.getElementById('histItemPrice').value);
+            const qty = parseInt(document.getElementById('histItemQty').value);
+
+            trip.items.push({ id: Date.now(), name, price, qty, subtotal: price * qty });
+            trip.total = trip.items.reduce((sum, i) => sum + i.subtotal, 0);
+            
+            localStorage.setItem('groceryHistory', JSON.stringify(shoppingHistory));
+            this.reset();
+            document.getElementById('histItemQty').value = 1;
+            renderTripDetailsView();
+            renderHistory();
+        });
+
+        // Edit Item Features
+        function openEditModal(itemId) {
+            const trip = shoppingHistory.find(t => t.id === activeTripId);
+            const item = trip.items.find(i => i.id === itemId);
+            if (!item) return;
+
+            document.getElementById('editItemId').value = item.id;
+            document.getElementById('editItemName').value = item.name;
+            document.getElementById('editItemPrice').value = item.price;
+            document.getElementById('editItemQty').value = item.qty;
+
+            const modal = document.getElementById('editModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('editModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        document.getElementById('editItemForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const id = parseInt(document.getElementById('editItemId').value);
+            const name = document.getElementById('editItemName').value;
+            const price = parseFloat(document.getElementById('editItemPrice').value);
+            const qty = parseInt(document.getElementById('editItemQty').value);
+
+            const trip = shoppingHistory.find(t => t.id === activeTripId);
+            const item = trip.items.find(i => i.id === id);
+
+            if (item) {
+                item.name = name;
+                item.price = price;
+                item.qty = qty;
+                item.subtotal = price * qty;
+                trip.total = trip.items.reduce((sum, i) => sum + i.subtotal, 0);
+
+                localStorage.setItem('groceryHistory', JSON.stringify(shoppingHistory));
+                renderTripDetailsView();
+                renderHistory();
+                closeEditModal();
+            }
+        });
+
+        function removeHistoryItem(itemId) {
+            if(!confirm("Remove this item from the receipt?")) return;
+            const trip = shoppingHistory.find(t => t.id === activeTripId);
+            trip.items = trip.items.filter(i => i.id !== itemId);
+            trip.total = trip.items.reduce((sum, i) => sum + i.subtotal, 0);
+            
+            localStorage.setItem('groceryHistory', JSON.stringify(shoppingHistory));
+            renderTripDetailsView();
+            renderHistory();
+        }
+
+        function deleteEntireTrip() {
+            if (confirm("Delete this entire shopping trip? This action cannot be undone.")) {
+                shoppingHistory = shoppingHistory.filter(t => t.id !== activeTripId);
+                localStorage.setItem('groceryHistory', JSON.stringify(shoppingHistory));
+                showDashboard();
+            }
+        }
+
+        function showDashboard() {
+            activeTripId = null;
+            renderHistory(); 
+            
+            tripDetailsView.classList.remove('opacity-100');
+            tripDetailsView.classList.add('opacity-0', 'pointer-events-none');
+            
+            setTimeout(() => {
+                tripDetailsView.classList.add('hidden');
+                tripDetailsView.classList.remove('absolute', 'top-0', 'left-0', 'w-full');
+                dashboardView.classList.remove('hidden');
+                
+                setTimeout(() => { dashboardView.classList.remove('opacity-0', 'pointer-events-none'); }, 10);
+            }, 300);
+        }
+    </script>
+</body>
+</html>
